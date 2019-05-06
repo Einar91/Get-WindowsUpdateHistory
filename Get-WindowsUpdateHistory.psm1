@@ -4,7 +4,7 @@
     .DESCRIPTION
     .PARAMETER
     .EXAMPLE
-    Get-CybWindowsUpdateHistory -ComputerName SRV1 -DaysBack 15 -MaxRecords
+    Get-WindowsUpdateHistory -ComputerName SRV1 -DaysBack 15 -MaxRecords
     #>    
     [CmdletBinding()]
     param(
