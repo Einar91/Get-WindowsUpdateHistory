@@ -27,8 +27,10 @@
 
 
 BEGIN {
+    #Define date for how far back we want to retrive log data
     $Days = ((Get-Date).AddDays(-$DaysBack))
     
+    #Timestamp function for our verbos output and logs
     function TimeStamp{
         #Create TimeStamp function for our logging
         (get-date -Format "dd.MM.yyyy hh:mm:ss").ToString()
@@ -40,10 +42,8 @@ PROCESS {
     #Check which servers are online, so we skip invoke-command to offline computer(s) and create a lot of delay
     if($CheckIfOnline -eq $True){
         Write-Verbose "$(TimeStamp) Info.. Testing connection to remote computer(s)."
-        
         #Variable to store our online computers
         $OnlineComputers = @()
-        
         #Variable to store our offline computers
         $OfflineComputers = @()
         
@@ -63,8 +63,7 @@ PROCESS {
         foreach($OffComp in $OfflineComputers){
         $OffProperties = @{'ComputerName'=$OffComp
                         'Result'='Ping to computer failed.'}
-        $obj = New-Object psobject -Property $OffProperties
-        $obj                                    
+        New-Object psobject -Property $OffProperties
         }
 
         #Set our $ComputerName parameter to check only online computers
@@ -116,7 +115,7 @@ PROCESS {
         } #Function Convert-WuaResultCodeToName
 
         #Open our session to prepeare to query result
-        $UpdateSession = (New-Object -ComObject 'Microsoft.Update.Session')
+        $UpdateSession = (New-Object -ComObject 'Microsoft.Update.Session' -ErrorVariable $UpdateSessionError)
 
         #Query the number of records specified in $MaxRecords and restrict it to a number of days back with $DaysBack
         $history = $UpdateSession.QueryHistory("",0,$using:MaxRecords)
@@ -135,15 +134,26 @@ PROCESS {
             $obj = New-Object psobject -Property $Properties
             $obj | Where-Object -FilterScript {$_.Date -gt $Using:Days}
         }
+
+        if($UpdateSessionError){
+            $UpdateSessionErrorProperties = @{'ComputerName'=$env:COMPUTERNAME
+                                                'Result'='Session error'}
+            New-Object -TypeName psobject -Property $UpdateSessionErrorProperties
+        }
     } -HideComputerName -ErrorAction SilentlyContinue -ErrorVariable FailedConnections
 
-    #Check for failed connections with invoke-command and output object
-    foreach($InvokedComputer in $FailedConnections.TargetObject){
-        $InvProperties = @{'ComputerName'=$InvokedComputer
-                        'Result'='Querying computer failed.'}
-        $obj = New-Object psobject -Property $InvProperties
-        $obj
-    } #Foreach
+    #Check for failed connections or errors from invoke-command
+    $FailedMachines = @()
+    $FailedMachines += $FailedConnections.TargetObject | Select-Object -Unique
+    $FailedMachines += $FailedConnections.OriginInfo | Select-Object -Unique -ExpandProperty PSComputerName
+
+    if($FailedMachines){
+        foreach($FailedItem in $FailedMachines){
+            $FailedProp = @{'ComputerName'=$FailedItem
+                            'Result'='Querying computer failed.'}
+            New-Object psobject -Property $FailedProp
+        } #Foreach
+    } #If
 
     Write-Verbose "$(TimeStamp) Info.. Querying done, ending script."
 } #PROCESS
